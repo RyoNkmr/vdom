@@ -19,15 +19,15 @@ export const createVNode = (
 ): VNode => ({ nodeName, attributes, children })
 
 const isVNode = (neko: Neko): neko is VNode => typeof neko !== 'string'
-const eventHandlerAttributeRegexp = /^on([A-Z]\w+)$/
+const eventHandlerAttributeRegexp = /^on(\w+)$/
 
 const setAttributes = (element: HTMLElement, attributes: Attributes) =>
   Object.entries(attributes).forEach(([attribute, value]) => {
     const [, eventName = null] =
       eventHandlerAttributeRegexp.exec(attribute) || []
-    eventName
-      ? element.addEventListener(eventName, value as EventListener)
-      : element.setAttribute(attribute, value as string)
+    eventName === null
+      ? element.setAttribute(attribute, value as string)
+      : element.addEventListener(eventName, value as EventListener)
   })
 
 export const createRealElement = (neko: Neko): HTMLElement | Text => {
@@ -47,6 +47,7 @@ export const createRealElement = (neko: Neko): HTMLElement | Text => {
     )
     element.appendChild(childrenElements)
   }
+  return element
 }
 
 enum Diff {
@@ -69,7 +70,7 @@ type Updater = (UpdaterArguments) => void
 const replaceElement: Updater = ({ parentElement, currentNode, nextNeko }) =>
   parentElement.replaceChild(createRealElement(nextNeko), currentNode)
 const updateValue: Updater = ({ currentNode, nextNeko }) =>
-  (currentNode.value = nextNeko.value)
+  (currentNode.value = nextNeko.attributes.value)
 const updateAttributes: Updater = ({
   currentNode,
   currentNeko: { attributes: currentAttributes },
@@ -95,9 +96,10 @@ const updateAttributes: Updater = ({
 
 type DiffFinder = {
   type: Diff
-  updater: Updater
+  updater: Updater | void
   finder: (kitty: Neko, kitten: Neko) => boolean
 }
+
 const diffFinders: DiffFinder[] = [
   {
     type: Diff.Type,
@@ -118,6 +120,8 @@ const diffFinders: DiffFinder[] = [
   {
     type: Diff.Value,
     finder: (kitty: VNode, kitten: VNode) =>
+      kitty.attributes &&
+      kitten.attributes &&
       kitty.attributes.value !== kitten.attributes.value,
     updater: updateValue,
   },
@@ -127,17 +131,18 @@ const diffFinders: DiffFinder[] = [
       JSON.stringify(kitty.attributes) !== JSON.stringify(kitten.attributes),
     updater: updateAttributes,
   },
+  {
+    type: Diff.None,
+    finder: (kitty: VNode, kitten: VNode) => true,
+    updater: null,
+  },
 ]
 
 const findUpdater = (kitty: Neko, kitten: Neko): Updater | void =>
-  (
-    diffFinders.find(({ finder }) => finder(kitty, kitten)) || {
-      updater: null,
-    }
-  ).updater
+  diffFinders.find(({ finder }) => finder(kitty, kitten)).updater
 
 const takeLonger = (one, theOther) =>
-  one.length >= theOther.length ? one : theOther
+  one.length > theOther.length ? one : theOther
 
 export const updateRealElement: Updater = ({
   parentElement,
@@ -155,8 +160,8 @@ export const updateRealElement: Updater = ({
   }
 
   const updater = findUpdater(currentNeko, nextNeko)
-  if (updater) {
-    updater({ parentElement, currentNode, currentNeko, nextNeko })
+  if (typeof updater === 'function') {
+    return updater({ parentElement, currentNode, currentNeko, nextNeko })
   }
 
   if (isVNode(currentNeko) && isVNode(nextNeko)) {
@@ -164,7 +169,7 @@ export const updateRealElement: Updater = ({
       updateRealElement({
         parentElement: currentNode as HTMLElement,
         currentNode: currentNode.childNodes[index],
-        crrentNeko: currentNeko.children[index],
+        currentNeko: currentNeko.children[index],
         nextNeko: nextNeko.children[index],
       })
     )

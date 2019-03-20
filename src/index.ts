@@ -1,17 +1,18 @@
-import { MutationTree } from './mutator'
+import { MutationMap } from './mutator'
 import { VDOM, VNode, createRealElement, updateRealElement } from './vdom'
 
 interface NekoConstructor<State, Mutations> {
-  rootElement: HTMLElement | string
-  vdom: VDOM<State, MutationTree<State>>
+  readonly rootElement: HTMLElement | string
+  readonly vdom: VDOM<State, MutationMap<State>>
   state: State
-  mutations: MutationTree<State>
+  readonly mutations: MutationMap<State>
 }
-export default class VirtualNeko<State, Mutatitons> {
+
+export default class VirtualNeko<State, Mutations> {
   private readonly rootElement: HTMLElement
-  private readonly vdom: VDOM<State, MutationTree<State>>
+  private readonly vdom: VDOM<State, MutationMap<State>>
   private state: State
-  private readonly mutations: MutationTree<State>
+  private readonly mutations: MutationMap<State>
   private currentTree: VNode
   private nextTree: VNode
   private renderRequestId: number | null = null
@@ -21,41 +22,34 @@ export default class VirtualNeko<State, Mutatitons> {
     vdom,
     state,
     mutations,
-  }: NekoConstructor<State, Mutatitons>) {
+  }: NekoConstructor<State, Mutations>) {
     this.rootElement =
       typeof rootElement === 'string'
         ? document.querySelector(rootElement)
         : rootElement
-    this.vdom = this.registerVDOM(vdom)
-    // this.state = this.observeState(state)
     this.state = state
+    this.vdom = vdom
     this.mutations = this.observeMutations(mutations)
-    this.refreshVDOM()
+    this.updateVDOM()
   }
 
-  private registerVDOM(vdom): VDOM<State, MutationTree<State>> {
-    return vdom
-  }
-
-  private updateVDOM(nextState: State = this.state): State {
+  private updateVDOM(nextState: State = this.state): void {
     this.state = nextState
-    this.nextTree = this.vdom(nextState, this.mutations)
-    this.render()
-    return nextState
+    this.nextTree = this.vdom(this.state, this.mutations)
+    this.throttleRendering()
   }
 
-  private observeMutations(
-    mutations: MutationTree<State>
-  ): MutationTree<State> {
+  private observeMutations(mutations: MutationMap<State>): MutationMap<State> {
     return Object.entries(mutations).reduce(
-      (tree, [mutationKey, mutation]): MutationTree<State> => ({
+      (tree, [mutationKey, mutation]) => ({
         ...tree,
         [mutationKey]: (state: State, ...payload: any) => {
           const newState = mutation(state, ...payload)
-          return this.updateVDOM(newState)
+          this.updateVDOM(newState)
+          return newState
         },
       }),
-      {} as MutationTree<State>
+      {} as MutationMap<State>
     )
   }
 
@@ -68,7 +62,7 @@ export default class VirtualNeko<State, Mutatitons> {
   public render(): void {
     this.currentTree
       ? updateRealElement({
-          parentElemen: this.rootElement,
+          parentElement: this.rootElement,
           currentNode: this.rootElement.firstChild,
           currentNeko: this.currentTree,
           nextNeko: this.nextTree,
@@ -80,4 +74,4 @@ export default class VirtualNeko<State, Mutatitons> {
 }
 
 export { VDOM, createVNode } from './vdom'
-export { MutationTree } from './mutator'
+export { MutationMap } from './mutator'
