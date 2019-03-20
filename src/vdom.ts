@@ -8,10 +8,6 @@ export interface VNode {
   children: Neko[]
 }
 
-export interface VDOM<State, Mutations> {
-  (state: State, mutaitons: Mutations): VNode
-}
-
 export const createVNode = (
   nodeName: NodeName,
   attributes: Attributes,

@@ -39,10 +39,10 @@ const mutations: MutationMap<State> = {
       },
     }
   },
-  createTask(state, title: string) {
+  createTask(state) {
     return {
       ...state,
-      tasks: [...state.tasks, title],
+      tasks: [...state.tasks, state.form.input],
       form: {
         ...state.form,
         input: '',
@@ -57,7 +57,7 @@ const mutations: MutationMap<State> = {
   },
 }
 
-const vdom: VDOM<State, Mutations> = (state, mutations) => {
+const vdom: VDOM<State> = ({ state, mutations }) => {
   return h(
     'div',
     { style: 'padding: 20px;' },
@@ -89,7 +89,7 @@ const vdom: VDOM<State, Mutations> = (state, mutations) => {
             const isValid = validateInput(currentInput)
             mutations.updateHasError(state, isValid)
             if (isValid) {
-              mutations.createTask(state, currentInput)
+              mutations.createTask(state)
             }
           },
         },
@@ -130,7 +130,9 @@ const vdom: VDOM<State, Mutations> = (state, mutations) => {
 
 new VirtualNeko<State, Mutations>({
   rootElement: '#app',
-  state,
   vdom,
-  mutations,
+  store: {
+    state,
+    mutations,
+  },
 })
